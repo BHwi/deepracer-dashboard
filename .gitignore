@@ -1,1 +1,30 @@
-*/*.log
+# ---- 실행하면 생기는 것들 (대시보드와 도구가 만듭니다) ----
+runs/*
+!runs/.gitkeep
+data/
+state/
+.env
+trainer_state.json
+trainer_settings.json
+trainer_tasks/
+portable/
+*.tar.gz
+
+# ---- 내려받은 트랙: reInvent2019_track.npy 만 포함 (나머지는 출처의 라이선스를 확인하지 못해 포함하지 않음, README 참고) ----
+tracks/*
+!tracks/reInvent2019_track.npy
+
+# ---- 시험용 가짜 DRfC 의 실행 흔적 ----
+tools/mock_drfc/.mock_state/
+tools/mock_drfc/experiments/*
+!tools/mock_drfc/experiments/.gitkeep
+tools/mock_drfc/data/minio/
+tools/mock_drfc/data/output/*
+!tools/mock_drfc/data/output/.gitkeep
+**/system.env.bak-*
+**/run.env.bak-*
+
+# ---- 파이썬 ----
+__pycache__/
+*.pyc
+.venv/
