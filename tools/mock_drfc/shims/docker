@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+S="$(cd "$(dirname "$0")/.." && pwd)/.mock_state"; mkdir -p "$S"
+case "$1" in
+  --version) echo "Docker version 27.0.0-mock, build mock" ;;
+  info) case "$*" in *ServerVersion*) echo "27.0.0-mock" ;; *Runtimes*) [[ -z "$MOCK_NO_GPU" ]] && echo '{"nvidia":{},"runc":{}}' || echo '{"runc":{}}' ;; esac ;;
+  compose) echo "Docker Compose version v2.29.0-mock" ;;
+  ps) [[ -f "$S/containers.txt" ]] && cat "$S/containers.txt"; exit 0 ;;
+  image) exit 0 ;;
+  inspect) [[ -f "$S/prefix.txt" ]] && echo "MODEL_S3_PREFIX=$(cat "$S/prefix.txt")" && echo "OTHER=1"; exit 0 ;;
+  stack)
+    # 가짜 스택 상태. stack_alive: 작업이 준비 중, stack_stale: 종료된 작업의 기록만 남음 (파일 내용은 스택 이름, 예: deepracer-0)
+    case "$2" in
+      ls) { [[ -f "$S/containers.txt" ]] && { grep -q "deepracer-eval" "$S/containers.txt" && echo "deepracer-eval-0" || echo "deepracer-0"; }
+            for f in stack_alive stack_stale; do [[ -f "$S/$f" ]] && cat "$S/$f"; done; } | sort -u; exit 0 ;;
+      ps) name="$3"; states=()
+          [[ -f "$S/stack_alive" && "$(cat "$S/stack_alive")" == "$name" ]] && states+=("Preparing 5 seconds ago")
+          [[ -f "$S/stack_stale" && "$(cat "$S/stack_stale")" == "$name" ]] && states+=("Shutdown 3 minutes ago" "Failed 3 minutes ago")
+          if [[ ${#states[@]} -gt 0 ]]; then
+            if [[ "$*" == *--format* ]]; then printf '%s\n' "${states[@]}"
+            else echo "ID NAME IMAGE NODE DESIRED STATE CURRENT STATE ERROR PORTS"; for st in "${states[@]}"; do echo "x $name.1 img node Shutdown $st"; done; fi
+          fi; exit 0 ;;
+      rm) rm -f "$S/containers.txt" "$S/stack_alive" "$S/stack_stale"; [[ -f "$S/pid" ]] && { kill "$(cat "$S/pid")" 2>/dev/null; rm -f "$S/pid"; }; echo "Removing service $3 (mock)"; exit 0 ;;
+    esac ;;
+  rm) shift; for a in "$@"; do [[ "$a" == -* ]] && continue; [[ -f "$S/containers.txt" ]] && grep -v "^$a|" "$S/containers.txt" > "$S/containers.tmp" && mv "$S/containers.tmp" "$S/containers.txt"; done
+      [[ -f "$S/containers.txt" ]] && ! grep -q "robomaker" "$S/containers.txt" && { rm -f "$S/containers.txt"; [[ -f "$S/pid" ]] && { kill "$(cat "$S/pid")" 2>/dev/null; rm -f "$S/pid"; }; }; exit 0 ;;
+  pull) echo "Pulling from ${2%%:*} (mock)"; sleep 2; echo "Status: Downloaded newer image for $2 (mock)" ;;
+  logs) [[ -f "$S/mock.log" ]] && tail -n "${3:-100}" "$S/mock.log" ;;
+  run) if [[ -z "$MOCK_NO_GPU" ]]; then echo "GPU 0: NVIDIA GeForce RTX 3090 (UUID: GPU-mock)"; else echo 'docker: Error response from daemon: could not select device driver "" with capabilities: [[gpu]].'; exit 125; fi ;;
+  *) exit 0 ;;
+esac

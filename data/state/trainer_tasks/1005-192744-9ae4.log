@@ -1,0 +1,13 @@
+$ dr-stop-training
+Updating service s3_minio (id: neued0rv5d6fyp7loz286mhuh)
+image minio/minio:RELEASE.2025-09-07T16-13-09Z-local could not be accessed on a registry to record
+its digest. Each node will access minio/minio:RELEASE.2025-09-07T16-13-09Z-local independently,
+possibly leading to different nodes running different
+versions of the image.
+
+Found Sagemaker as h9t0ihrrvm-algo-1-rqjil
+Stopping service algo-1-rqjil
+ Container h9t0ihrrvm-algo-1-rqjil  Stopping
+ Container h9t0ihrrvm-algo-1-rqjil  Stopped
+Removing service deepracer-0_rl_coach
+Removing service deepracer-0_robomaker

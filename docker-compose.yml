@@ -1,0 +1,30 @@
+# DeepRacer Trainer (Docker). 실행은 ./drtrainer up 이 .env 를 만들고 이 파일을 쓴다.
+#
+# DRfC 는 호스트의 Docker 로 시뮬레이터/minio 컨테이너를 띄운다(Docker-outside-of-Docker). 그래서
+#   - docker.sock 을 연결하고,
+#   - DRfC 폴더와 ~/.aws 를 호스트와 '같은 절대경로'로 마운트하고(형제 컨테이너의 bind mount 는 호스트 기준 경로),
+#   - 호스트 네트워크를 쓴다 (DRfC 가 minio 주소를 localhost:9000 으로 고정해 둠. 대시보드도 호스트의 127.0.0.1 에만 열림).
+name: drtrainer
+services:
+  trainer:
+    build: .
+    image: drtrainer:local
+    container_name: drtrainer
+    init: true
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      HOST_UID: ${HOST_UID:?./drtrainer up 으로 실행하세요}
+      HOST_GID: ${HOST_GID:?}
+      HOST_USER: ${HOST_USER:?}
+      HOST_HOME: ${HOST_HOME:?}
+      DRFC_DIR: ${DRFC_DIR:?}
+      DRFC_ARCH: ${DRFC_ARCH:-auto}
+      DASHBOARD_PORT: ${DASHBOARD_PORT:-8765}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${DRFC_DIR}:${DRFC_DIR}
+      - ${HOST_HOME}/.aws:${HOST_HOME}/.aws
+      - /tmp/sagemaker:/tmp/sagemaker
+      - ${TRAINER_DATA:-./data}/runs:/app/runs
+      - ${TRAINER_DATA:-./data}/state:/app/state

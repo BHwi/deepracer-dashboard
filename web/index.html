@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DeepRacer Trainer</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="bar">
+  <div class="wordmark">DeepRacer Trainer</div>
+  <nav class="tabs" role="tablist" aria-label="제품">
+    <button role="tab" data-product="mr">MiniRacer</button>
+    <button role="tab" data-product="dr">DeepRacer</button>
+  </nav>
+  <div class="live" id="live" aria-live="polite"></div>
+</header>
+
+<div class="shell">
+  <aside class="rail" aria-label="메뉴">
+    <section class="group" data-group="mr">
+      <button class="grouphead" aria-expanded="true" aria-controls="grp-mr"><span class="chev" aria-hidden="true"></span>MiniRacer<span class="pill" id="mrpill"></span></button>
+      <div class="groupbody" id="grp-mr">
+        <nav class="menu" aria-label="MiniRacer 메뉴">
+          <button data-tab="new">새 실험</button>
+          <button data-tab="result">결과</button>
+          <button data-tab="drive">주행 시험</button>
+          <button data-tab="compare">비교</button>
+          <button data-tab="clean">실험 정리</button>
+        </nav>
+        <h2>실험 기록</h2>
+        <ul id="runlist"></ul>
+        <p class="railnote" id="railnote"></p>
+      </div>
+    </section>
+    <section class="group" data-group="dr">
+      <button class="grouphead" aria-expanded="false" aria-controls="grp-dr"><span class="chev" aria-hidden="true"></span>DeepRacer<span class="pill" id="drpill"></span></button>
+      <div class="groupbody" id="grp-dr" hidden>
+        <nav class="menu" aria-label="DeepRacer 메뉴">
+          <button data-tab="dr-env">환경 점검<span class="dot" id="dot-env"></span></button>
+          <button data-tab="dr-new">새 실험</button>
+          <button data-tab="dr-run">학습<span class="dot" id="dot-run"></span></button>
+          <button data-tab="dr-eval">평가</button>
+          <button data-tab="dr-export">차량용 내보내기</button>
+          <button data-tab="dr-clean">실험 정리</button>
+          <button data-tab="dr-admin">관리</button>
+        </nav>
+        <h2>실험 목록</h2>
+        <ul id="drlist"></ul>
+        <p class="railnote" id="drnote"></p>
+      </div>
+    </section>
+  </aside>
+
+  <main>
+    <div id="dr-banner" class="drbanner" role="status" hidden></div>
+    <!-- 새 실험 -->
+    <section id="tab-new" class="tab" hidden>
+      <form id="newform" class="newgrid" autocomplete="off">
+        <div class="setup">
+          <h3>실험</h3>
+          <label class="field"><span>이름</span><input id="f-name" maxlength="40" placeholder="예: center_line_1" required></label>
+          <label class="field"><span>트랙</span><select id="f-track"></select></label>
+          <canvas id="trackPreview" class="preview" aria-label="선택한 트랙 모양"></canvas>
+
+          <h3>행동 공간</h3>
+          <label class="field"><span>조향각 (도)</span><input id="f-steer" placeholder="-30, -15, 0, 15, 30"></label>
+          <label class="field"><span>속도 (m/s)</span><input id="f-speed" placeholder="0.8, 1.6, 2.4"></label>
+          <p class="note" id="actcount"></p>
+
+          <h3>학습 설정</h3>
+          <div class="spec" id="hpgrid"></div>
+          <details class="adv"><summary>더 보기</summary><div class="spec" id="hpadv"></div></details>
+        </div>
+
+        <div class="codecol">
+          <div class="codehead">
+            <h3>보상함수</h3>
+            <label class="inline">예제에서 불러오기 <select id="f-example"></select></label>
+          </div>
+          <textarea id="f-code" spellcheck="false" aria-label="reward_function.py"></textarea>
+          <div class="actions">
+            <button class="primary" type="submit" id="f-submit">학습 시작</button>
+            <span id="newmsg" class="msg" role="status"></span>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <!-- 결과 -->
+    <section id="tab-result" class="tab" hidden>
+      <div id="res-empty" class="empty"></div>
+      <div id="res-body" hidden>
+        <div class="runhead">
+          <h1 id="r-name"></h1>
+          <span id="r-state" class="state"></span>
+          <span id="r-meta" class="meta"></span>
+          <button id="r-stop" class="quiet" hidden>학습 중지</button>
+        </div>
+
+        <div class="resgrid">
+          <div class="mapcol">
+            <div class="seg" id="layerseg" role="group" aria-label="지도 표시">
+              <button data-layer="replay" class="on">주행 재생</button>
+              <button data-layer="heat">보상 분포</button>
+            </div>
+            <canvas id="map" aria-label="트랙 지도"></canvas>
+            <div class="mapctl">
+              <button id="m-play" class="quiet">일시정지</button>
+              <select id="m-speed" aria-label="재생 속도"><option value="1">1배속</option><option value="2" selected>2배속</option><option value="4">4배속</option></select>
+              <div class="seg" id="m-eps" role="group" aria-label="평가 주행 선택"></div>
+            </div>
+            <div class="scrub">
+              <label for="r-scrub">iteration</label>
+              <input type="range" id="r-scrub" min="1" max="1" value="1">
+              <output id="r-scrub-out">1</output>
+              <label class="chk"><input type="checkbox" id="r-follow"> 최신 따라가기</label>
+            </div>
+            <p id="m-info" class="mapinfo"></p>
+          </div>
+          <div class="telecol"><div id="tele"></div><p class="note">그래프를 누르면 그 iteration이 선택되고, 왼쪽 지도에서 그때의 평가 주행이 재생됩니다. 그래프 아래쪽의 주황 눈금은 best 모델이 나온 iteration입니다.</p></div>
+        </div>
+
+        <div class="lower">
+          <div class="smalls" id="smalls"></div>
+          <div class="ledgerwrap">
+            <h3>iteration별 기록</h3>
+            <div class="ledgerscroll"><table id="ledger"></table></div>
+          </div>
+        </div>
+
+        <details id="logbox"><summary>학습 로그</summary><pre id="r-log"></pre></details>
+        <details><summary>이 실험에 쓴 설정</summary><pre id="r-hp"></pre><pre id="r-code"></pre></details>
+      </div>
+    </section>
+
+    <!-- 주행 시험 -->
+    <section id="tab-drive" class="tab" hidden>
+      <h1>주행 시험</h1>
+      <p class="note">학습이 끝난 모델을 탐험 없이 달려 봅니다. 다른 트랙에서 달리면 모델이 처음 보는 코스에 얼마나 통하는지(일반화), 외란을 주면 현실처럼 센서와 조향이 어긋날 때 얼마나 무너지는지 볼 수 있습니다.</p>
+      <form id="driveform" class="toolrow">
+        <label>실험 <select id="d-run"></select></label>
+        <label>모델 <select id="d-model"><option value="best">best (평가 최고)</option><option value="final">final (마지막)</option></select></label>
+        <label>트랙 <select id="d-track"></select></label>
+        <label>외란 <input id="d-noise" type="number" min="0" max="5" step="0.5" value="0"></label>
+        <label>시도 <input id="d-laps" type="number" min="1" max="6" step="1" value="3"></label>
+        <button class="primary" type="submit">주행하기</button>
+      </form>
+      <p id="d-msg" class="msg" role="status"></p>
+      <div class="drivegrid">
+        <div>
+          <canvas id="dmap" aria-label="주행 시험 지도"></canvas>
+          <div class="mapctl"><button id="d-play" class="quiet">일시정지</button></div>
+        </div>
+        <div>
+          <table id="d-table"></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 비교 -->
+    <section id="tab-compare" class="tab" hidden>
+      <h1>실험 비교</h1>
+      <div id="cmp-empty" class="empty"></div>
+      <div id="cmp-body" hidden>
+        <div id="cmp-legend" class="legend"></div>
+        <div class="cmpgrid" id="cmp-charts"></div>
+        <table id="cmp-table"></table>
+        <p class="note">보상 값은 보상함수가 다르면 비교할 수 없어서 진행률, 랩타임, 완주율로 비교합니다. 시드 1개의 결과이니 차이가 작으면 시드를 바꿔 다시 돌려 보세요.</p>
+      </div>
+    </section>
+
+    <!-- DeepRacer: 환경 점검 -->
+    <section id="tab-dr-env" class="tab" hidden>
+      <div class="pagehead"><h1>환경 점검</h1><button class="quiet" id="dr-recheck" type="button">점검 다시 실행</button></div>
+      <p class="mockbanner" id="dr-mock" hidden>시험용 가짜 DRfC가 연결돼 있습니다. 실제 학습은 하지 않고 화면과 흐름만 확인할 수 있습니다. 실제 DRfC 폴더를 지정하면 해제됩니다.</p>
+      <form id="dr-dirform" class="dirform">
+        <label>DRfC 폴더 <input id="dr-dir" spellcheck="false" placeholder="/home/ubuntu/deepracer-for-cloud"></label>
+        <button class="quiet" type="submit">지정</button><span id="dr-dirmsg" class="msg" role="status"></span>
+      </form>
+      <ul id="dr-checks" class="checks"></ul>
+      <h3>GPU / CPU</h3>
+      <div id="dr-arch" class="archbox"></div>
+      <details id="dr-install" class="install"><summary>자동 설치 (스크립트 한 줄)</summary><div id="dr-installbody"></div></details>
+      <div id="dr-envtask" class="taskbox" hidden></div>
+    </section>
+
+    <!-- DeepRacer: 새 실험 -->
+    <section id="tab-dr-new" class="tab" hidden>
+      <h1>DeepRacer 새 실험</h1>
+      <p class="note">DRfC 의 <code>experiments/&lt;이름&gt;/</code> 폴더(run.env, custom_files)를 만듭니다. 실험 이름이 곧 모델 이름(저장 위치)입니다. 이 양식은 타임 트라이얼(카메라 한 대) 기준입니다.</p>
+      <form id="dr-newform" class="newgrid" autocomplete="off">
+        <div class="setup">
+          <h3>시작점</h3>
+          <label class="field"><span>가져오기</span><select id="dn-source"></select></label>
+          <p class="note" id="dn-sourcenote"></p>
+          <div id="dn-prerow" hidden>
+            <label class="field"><span>사전 모델</span><input id="dn-prefix" readonly></label>
+            <label class="field"><span>체크포인트</span><select id="dn-prechk"><option value="last">last (마지막)</option><option value="best">best (평가 최고)</option></select></label>
+          </div>
+          <h3>실험</h3>
+          <label class="field"><span>이름</span><input id="dn-name" maxlength="40" required placeholder="예: sprint_v1"></label>
+          <label class="field"><span>트랙</span><input id="dn-world" list="dn-worlds" required spellcheck="false"><datalist id="dn-worlds"></datalist></label>
+          <p class="note">트랙 이름은 시뮬레이터 이미지에 들어 있는 이름이어야 합니다. 틀리면 학습을 시작한 뒤 시뮬레이터 로그에 오류가 납니다.</p>
+          <label class="field"><span>차 색상</span><select id="dn-color"></select></label>
+          <h3>알고리즘과 행동 공간</h3>
+          <div class="field"><span>알고리즘</span><div class="seg" id="dn-algo"><button type="button" data-v="ppo" class="on">PPO</button><button type="button" data-v="sac">SAC</button></div></div>
+          <div class="field" id="dn-typerow"><span>행동 종류</span><div class="seg" id="dn-atype"><button type="button" data-v="discrete" class="on">이산</button><button type="button" data-v="continuous">연속</button></div></div>
+          <div id="dn-discrete">
+            <label class="field"><span>조향각 (도)</span><input id="dn-steer" placeholder="-30, -15, 0, 15, 30"></label>
+            <label class="field"><span>속도 (m/s)</span><input id="dn-speed" placeholder="0.8, 1.6, 2.4"></label>
+            <p class="note" id="dn-actcount"></p>
+          </div>
+          <div id="dn-continuous" hidden>
+            <label class="field"><span>조향각 최소</span><input id="dn-slo" type="number" step="1" value="-30"></label>
+            <label class="field"><span>조향각 최대</span><input id="dn-shi" type="number" step="1" value="30"></label>
+            <label class="field"><span>속도 최소</span><input id="dn-vlo" type="number" step="0.1" value="1"></label>
+            <label class="field"><span>속도 최대</span><input id="dn-vhi" type="number" step="0.1" value="2"></label>
+          </div>
+          <p class="note">실제 DeepRacer 차량으로 가져갈 모델이면 속도와 조향 범위를 차량 사양 안에서 정하세요.</p>
+          <h3>학습 설정</h3>
+          <div class="spec" id="dn-hp"></div>
+          <details class="adv"><summary>학습 환경 더 보기</summary><div class="spec" id="dn-env"></div></details>
+        </div>
+        <div class="codecol">
+          <div class="codehead">
+            <h3>보상함수</h3>
+            <label class="inline">예제에서 불러오기 <select id="dn-example"></select></label>
+          </div>
+          <textarea id="dn-code" spellcheck="false" aria-label="reward_function.py"></textarea>
+          <div class="actions"><button type="button" class="quiet" id="dn-lint">보상함수 점검</button><span id="dn-lintmsg" class="msg" role="status"></span></div>
+          <div class="actions">
+            <button class="primary" type="submit" id="dn-make">실험 만들기</button>
+            <button class="primary ghost" type="button" id="dn-makego">만들고 바로 학습</button>
+            <span id="dn-msg" class="msg" role="status"></span>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <!-- DeepRacer: 학습 -->
+    <section id="tab-dr-run" class="tab" hidden>
+      <div id="drr-empty" class="empty"></div>
+      <div id="drr-body" hidden>
+        <div class="runhead">
+          <h1 id="drr-name"></h1><span id="drr-state" class="state"></span><span id="drr-meta" class="meta"></span>
+          <span class="headactions"><button class="primary small" id="drr-start" type="button">학습 시작</button><button class="quiet" id="drr-stop" type="button" hidden>중지</button></span>
+        </div>
+        <label class="wipe" id="drr-wipewrap" hidden><input type="checkbox" id="drr-wipe"> 덮어쓰기: 같은 이름의 기존 모델을 지우고 처음부터 다시 학습합니다 (되돌릴 수 없습니다)</label>
+        <div class="chips" id="drr-chips"></div>
+        <div id="drr-task" class="taskbox" hidden></div>
+        <div class="streambox" id="drr-stream"></div>
+        <div class="drgrid">
+          <div id="drr-charts" class="chartgrid"></div>
+          <div class="ledgerwrap">
+            <h3>iteration별 기록</h3>
+            <div class="ledgerscroll"><table id="drr-ledger"></table></div>
+            <p class="note">DRfC 의 지표 파일에는 iteration 번호가 없어서, 학습 에피소드를 정책 갱신 간격(<span id="drr-per">20</span>개)씩 묶어 환산한 값입니다.</p>
+          </div>
+        </div>
+        <h3>로그</h3>
+        <div class="logbar">
+          <div class="seg" id="drr-logrole"><button type="button" data-v="train" class="on">학습</button><button type="button" data-v="sim">시뮬레이터</button></div>
+          <label class="chk"><input type="checkbox" id="drr-logauto" checked> 자동 갱신</label>
+          <button class="quiet" id="drr-logbtn" type="button">지금 불러오기</button>
+          <span id="drr-logname" class="meta"></span>
+        </div>
+        <pre id="drr-log" class="logview"></pre>
+        <details><summary>이 실험의 설정</summary><div id="drr-config"></div></details>
+      </div>
+    </section>
+
+    <!-- DeepRacer: 평가 -->
+    <section id="tab-dr-eval" class="tab" hidden>
+      <div id="dre-empty" class="empty"></div>
+      <div id="dre-body" hidden>
+        <div class="runhead"><h1 id="dre-name"></h1><span id="dre-state" class="state"></span></div>
+        <p class="note">학습한 모델을 학습 없이 달려 평가합니다. DRfC 는 한 번에 하나(학습 또는 평가)만 실행하므로 학습을 먼저 중지하세요.</p>
+        <form id="dre-form" class="toolrow">
+          <label>평가 이름 <input id="dre-label" type="text" maxlength="60" autocomplete="off" placeholder="예: 보상함수 v2 평가" style="width:190px"></label>
+          <label>평가 주행 수 <input id="dre-trials" type="number" min="1" max="50" value="3"></label>
+          <label>체크포인트 <select id="dre-chk"><option value="last">last</option><option value="best">best</option></select></label>
+          <label class="chk2"><input type="checkbox" id="dre-cont" checked> 이탈해도 계속(벌점)</label>
+          <label class="chk2"><input type="checkbox" id="dre-rev"> 반대 방향</label>
+          <label class="chk2"><input type="checkbox" id="dre-mp4" checked> 주행 영상 저장 (MP4)</label>
+          <label class="chk2"><input type="checkbox" id="dre-clone"> 복사본으로 평가</label>
+          <button class="primary" type="submit" id="dre-start">평가 시작</button>
+          <button class="quiet" type="button" id="dre-stop" hidden>중지</button>
+        </form>
+        <p class="note"><strong>주행 영상 저장</strong>을 켜고 평가하면 평가가 끝난 뒤 영상이 저장소(<code>모델/mp4/</code>)에 만들어지고, 아래 평가 기록에서 평가 이름을 눌러 볼 수 있습니다. 켜지 않고 한 평가에는 영상이 없습니다 (DRfC 의 기본값은 저장 안 함입니다). 이름은 비워 두면 평가 시각으로 표시되고, 나중에 붙이거나 바꿀 수도 있습니다.</p>
+        <p class="note">'복사본으로 평가'는 모델 폴더를 새 이름으로 복사한 뒤 평가해서 원본에 평가 기록이 섞이지 않게 합니다 (DRfC 의 -c 옵션).</p>
+        <div id="dre-task" class="taskbox" hidden></div>
+        <div class="streambox" id="dre-stream"></div>
+        <h3>평가 기록</h3>
+        <div id="dre-results" class="evsplit"></div>
+      </div>
+    </section>
+
+    <!-- DeepRacer: 차량용 내보내기 -->
+    <section id="tab-dr-export" class="tab" hidden>
+      <div id="drx-empty" class="empty"></div>
+      <div id="drx-body" hidden>
+        <div class="runhead"><h1 id="drx-name"></h1><span id="drx-state" class="state"></span></div>
+        <p class="note">실물 DeepRacer 차량에 올릴 파일(<code>agent/model.pb</code> 와 <code>model_metadata.json</code> 이 든 tar.gz)을 만듭니다. DRfC 의 <code>dr-create-car-zip</code> 을 사용하며 학습 컨테이너가 꺼져 있어도 만들 수 있습니다.</p>
+        <form id="drx-form" class="toolrow">
+          <label>체크포인트 <select id="drx-best"><option value="0">last (마지막)</option><option value="1">best (평가 최고)</option></select></label>
+          <button class="primary" type="submit" id="drx-make">차량용 파일 만들기</button>
+        </form>
+        <div id="drx-task" class="taskbox" hidden></div>
+        <h3>만들어진 파일</h3>
+        <div id="drx-files"></div>
+        <p class="note">차량에 올리는 방법은 쓰고 있는 차량 소프트웨어(공식 펌웨어 또는 자체 관리형 솔루션)의 안내를 따르세요. 시뮬레이션과 실제 환경은 조명, 노면, 카메라가 달라서 성능이 다를 수 있습니다.</p>
+      </div>
+    </section>
+
+    <!-- MiniRacer: 실험 정리 -->
+    <section id="tab-clean" class="tab" hidden>
+      <h1>실험 정리</h1>
+      <p class="note">MiniRacer 실험 기록(runs/ 폴더의 학습 로그, 모델, 리포트)을 삭제합니다. <strong>되돌릴 수 없습니다.</strong> 학습 중인 실험은 지울 수 없습니다.</p>
+      <div id="cl-empty" class="empty" hidden></div>
+      <div id="cl-body">
+        <table id="cl-table"></table>
+        <div class="cleanbar">
+          <label>확인: <b>삭제</b> 라고 입력 <input id="cl-confirm" autocomplete="off" aria-label="삭제 확인"></label>
+          <button class="danger" id="cl-go" type="button" disabled>선택한 실험 삭제</button>
+          <span id="cl-msg" class="msg" role="status"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- DeepRacer: 관리 (dr-* 명령 버튼) -->
+    <section id="tab-dr-admin" class="tab" hidden>
+      <h1>DeepRacer 관리</h1>
+      <p class="note">DRfC 의 <code>dr-*</code> 명령을 버튼으로 실행합니다. 명령은 아래에서 고른 실험의 설정(<code>run.env</code>)으로 실행되고, 결과는 아래 작업 상자에 표시됩니다.
+      <b>읽기</b> 는 조회만, <b>변경</b> 은 설정이나 실행 상태를 바꾸고, <b>주의</b> 는 영향이 커서 확인을 한 번 더 받습니다. 학습·평가 시작은 각 화면에서 합니다.</p>
+      <div class="toolrow"><label>실행할 실험 <select id="dra-exp"></select></label></div>
+      <div id="dra-task" class="taskbox" hidden></div>
+      <div id="dra-groups"></div>
+      <h3>직접 입력</h3>
+      <form id="dra-custom" class="toolrow">
+        <input id="dra-cmd" type="text" autocomplete="off" spellcheck="false" placeholder="예: dr-update-env" style="width:360px" aria-label="dr 명령">
+        <button type="submit">실행</button>
+      </form>
+      <p class="note">DRfC 가 정의한 <code>dr-*</code> 명령 중 허용된 것만 실행됩니다. 인자는 영문, 숫자, <code>_ . / = : @ , + -</code> 만 쓸 수 있습니다 (셸 문법 문자 불가).
+      끝나지 않고 로그를 따라가는 명령, 전용 화면이 있는 시작 명령, 실제 AWS 계정에 쓰는 업로드 명령은 막혀 있습니다. 허용: <span id="dra-allowed"></span></p>
+    </section>
+
+    <!-- DeepRacer: 실험 정리 -->
+    <section id="tab-dr-clean" class="tab" hidden>
+      <h1>DeepRacer 실험 정리</h1>
+      <p class="note">실험을 삭제해서 이름과 저장 공간을 비웁니다. <strong>되돌릴 수 없습니다.</strong> 학습 중인 실험은 지울 수 없고, 다른 실험이 이어서 학습하는 데 쓰는 모델은 지워지지 않습니다.</p>
+      <div id="dc-empty" class="empty" hidden></div>
+      <div id="dc-body">
+        <table id="dc-table"></table>
+        <div class="cleanopts">
+          <label><input type="checkbox" id="dc-config" checked> 설정 (실험 폴더: run.env, 보상함수 등)</label>
+          <label><input type="checkbox" id="dc-model" checked> 학습한 모델과 지표 (저장소에서 삭제)</label>
+          <label><input type="checkbox" id="dc-files" checked> 만든 차량용 파일과 시뮬레이터 로그</label>
+        </div>
+        <div class="cleanbar">
+          <label>확인: <b>삭제</b> 라고 입력 <input id="dc-confirm" autocomplete="off" aria-label="삭제 확인"></label>
+          <button class="danger" id="dc-go" type="button" disabled>선택한 실험 삭제</button>
+          <span id="dc-msg" class="msg" role="status"></span>
+        </div>
+        <div id="dc-task" class="taskbox" hidden></div>
+      </div>
+    </section>
+  </main>
+</div>
+<script src="/app.js"></script>
+<script src="/dr.js"></script>
+</body>
+</html>

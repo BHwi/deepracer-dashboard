@@ -1,0 +1,21 @@
+$ dr-upload-custom-files && dr-start-evaluation -q
+[minio] 이미지가 있습니다: minio/minio:RELEASE.2025-09-07T16-13-09Z-local
+Updating service s3_minio (id: neued0rv5d6fyp7loz286mhuh)
+image minio/minio:RELEASE.2025-09-07T16-13-09Z-local could not be accessed on a registry to record
+its digest. Each node will access minio/minio:RELEASE.2025-09-07T16-13-09Z-local independently,
+possibly leading to different nodes running different
+versions of the image.
+
+minio 준비됨
+이전 실행이 남긴 종료된 작업 기록이 있어서 DRfC 가 시작을 거부합니다. 기록을 지웁니다: docker stack rm deepracer-eval-0
+Removing service deepracer-eval-0_rl_coach
+Removing service deepracer-eval-0_robomaker
+Uploading files to s3://bucket/custom_files/
+[33mWARNING: CPU governor is not set to performance on all cores.[0m
+         To switch now: sudo cpupower frequency-set -g performance
+Evaluation of model s3://bucket/final_test starting.
+Using image awsdeepracercommunity/deepracer-simapp:6.0.6-cpu
+
+Creating Robomaker configuration in s3://bucket/final_test/evaluation_params.yaml
+Creating service deepracer-eval-0_rl_coach
+Creating service deepracer-eval-0_robomaker

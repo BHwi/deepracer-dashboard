@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# DeepRacer Trainer (Docker) 실행 도우미. 호스트에 Docker Engine 만 있으면 된다.
+#
+#   ./drtrainer up [--arch gpu|cpu|auto] [--drfc-dir DIR] [--port N] [--rebuild]   # 시작 (처음이면 이미지 빌드와 DRfC 초기화로 오래 걸림)
+#   ./drtrainer down | restart | status | logs [-f] | shell
+#   ./drtrainer init [--arch gpu|cpu] [--force]   # DRfC 초기화를 다시 시도. system.env 가 있으면 건너뜀; --force 는 백업하고 처음부터(초기화가 중간에 멈췄을 때)
+#   ./drtrainer gpu                         # GPU 가 안 잡힐 때: 어디가 막혔는지 단계별로 진단 (아무것도 바꾸지 않음)
+#   ./drtrainer export [--with-simapp] [DIR]  # 다른 컴퓨터로 옮길 파일 묶음 만들기 (이미지를 docker save)
+#   ./drtrainer import [DIR]                  # 옮겨 온 묶음에서 이미지를 불러오기
+set -uo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
+ENVF=".env"; NAME="drtrainer"; IMAGE="drtrainer:local"
+die() { echo "오류: $*" >&2; exit 1; }
+getenvf() { [[ -f "$ENVF" ]] && grep -m1 "^$1=" "$ENVF" | cut -d= -f2- || true; }
+compose() { docker compose --env-file "$ENVF" "$@"; }
+
+need_docker() {
+    command -v docker >/dev/null 2>&1 || die "docker 명령이 없습니다. Docker Engine 을 먼저 설치하세요 (Ubuntu: sudo apt install docker.io docker-compose-v2, 또는 scripts/setup_drfc.sh)."
+    docker info >/dev/null 2>&1 || die "Docker 서버에 연결할 수 없습니다. 서버가 꺼져 있거나(sudo service docker start) 권한이 없습니다(sudo usermod -aG docker \$USER 후 다시 로그인)."
+    docker compose version >/dev/null 2>&1 || die "docker compose 플러그인이 없습니다 (sudo apt install docker-compose-v2)."
+    if docker info --format '{{.OperatingSystem}}' 2>/dev/null | grep -qi "docker desktop"; then
+        echo "주의: Docker Desktop 이 감지됐습니다. 이 구성은 호스트와 같은 절대경로를 형제 컨테이너가 쓰는 방식이라 Docker Desktop 에서는 동작하지 않을 수 있습니다."
+        echo "      Linux 또는 WSL2 안에 직접 설치한 Docker Engine 을 권장합니다 (DRfC 의 WSL2 문서도 같은 방식)."
+    fi
+}
+
+write_env() {   # write_env ARCH DRFC_DIR PORT
+    local data; data="$(getenvf TRAINER_DATA)"; [[ -n "$data" ]] || data="./data"
+    cat > "$ENVF" <<ENV
+HOST_UID=$(id -u)
+HOST_GID=$(id -g)
+HOST_USER=$(id -un)
+HOST_HOME=$HOME
+DRFC_DIR=$2
+DRFC_ARCH=$1
+DASHBOARD_PORT=$3
+TRAINER_DATA=$data
+ENV
+}
+
+cmd="${1:-help}"; shift || true
+case "$cmd" in
+  up)
+    ARCH="$(getenvf DRFC_ARCH)"; ARCH="${ARCH:-auto}"; DIR="$(getenvf DRFC_DIR)"; DIR="${DIR:-$HOME/deepracer-for-cloud}"; PORT="$(getenvf DASHBOARD_PORT)"; PORT="${PORT:-8765}"; REBUILD=0
+    while [[ $# -gt 0 ]]; do case "$1" in
+        --arch) ARCH="${2:-}"; shift 2 ;; --drfc-dir) DIR="${2:-}"; shift 2 ;; --port) PORT="${2:-}"; shift 2 ;; --rebuild) REBUILD=1; shift ;;
+        *) die "알 수 없는 옵션: $1" ;; esac; done
+    case "$ARCH" in gpu|cpu|auto) ;; *) die "--arch 는 gpu, cpu, auto 중 하나여야 합니다." ;; esac
+    DIR="${DIR/#\~/$HOME}"; [[ "$DIR" == /* ]] || die "--drfc-dir 는 절대경로여야 합니다."
+    need_docker
+    write_env "$ARCH" "$DIR" "$PORT"
+    DATA="$(getenvf TRAINER_DATA)"
+    # bind mount 원본을 미리 사용자 권한으로 만든다 (없으면 Docker 가 root 소유로 만든다)
+    mkdir -p "$DIR" "$HOME/.aws" "$DATA/runs" "$DATA/state" /tmp/sagemaker && chmod g+w /tmp/sagemaker 2>/dev/null || true
+    if docker image inspect "$IMAGE" >/dev/null 2>&1 && [[ $REBUILD -eq 0 ]]; then BUILD="--no-build"; else BUILD="--build"; echo "이미지를 빌드합니다 (처음에는 몇 분 걸립니다)..."; fi
+    compose up -d $BUILD || die "시작하지 못했습니다."
+    echo "대시보드가 열릴 때까지 기다립니다. 처음 실행이면 DRfC 초기화(도커 이미지 내려받기)로 몇 분 걸립니다. 진행 상황: ./drtrainer logs -f"
+    for _ in $(seq 1 "${DRTRAINER_WAIT_TRIES:-360}"); do
+        if curl -fsS "http://127.0.0.1:$PORT/api/info" >/dev/null 2>&1; then echo; echo "열렸습니다: http://127.0.0.1:$PORT"; exit 0; fi
+        [[ "$(docker inspect -f '{{.State.Running}}' "$NAME" 2>/dev/null)" == "true" ]] || { echo; docker logs --tail 30 "$NAME" 2>&1; die "컨테이너가 종료됐습니다. 위 로그를 확인하세요."; }
+        printf '.'; sleep 5
+    done
+    echo; die "30분 안에 열리지 않았습니다. ./drtrainer logs 로 확인하세요."
+    ;;
+  down) need_docker; compose down ;;
+  restart) need_docker; compose restart ;;
+  status) need_docker; docker ps --filter "name=^${NAME}$" --format 'table {{.Names}}\t{{.Status}}'; echo; echo "DRfC 폴더: $(getenvf DRFC_DIR)   모드: $(getenvf DRFC_ARCH)   주소: http://127.0.0.1:$(getenvf DASHBOARD_PORT)" ;;
+  logs) need_docker; docker logs "$@" "$NAME" ;;
+  shell) need_docker; docker exec -it -u "$(id -u):$(id -g)" -e "HOME=$HOME" -e "USER=$(id -un)" -w "$(getenvf DRFC_DIR)" "$NAME" /app/docker/run-pinned.sh bash ;;
+  gpu) bash scripts/gpu_check.sh "$(getenvf DRFC_DIR)" ;;
+  init)
+    need_docker; ARCH="$(getenvf DRFC_ARCH)"; ARCH="${ARCH:-auto}"; FORCE=()
+    while [[ $# -gt 0 ]]; do case "$1" in --arch) ARCH="${2:-auto}"; shift 2 ;; --force) FORCE=(--force); shift ;; *) die "알 수 없는 옵션: $1" ;; esac; done
+    docker exec -u "$(id -u):$(id -g)" -e "HOME=$HOME" -e "USER=$(id -un)" -e "DRFC_DIR=$(getenvf DRFC_DIR)" "$NAME" /app/docker/run-pinned.sh /app/docker/init-drfc.sh "$ARCH" "${FORCE[@]}" ;;
+  export)
+    need_docker; WITH=0; OUT="portable"
+    for a in "$@"; do case "$a" in --with-simapp) WITH=1 ;; *) OUT="$a" ;; esac; done
+    docker image inspect "$IMAGE" >/dev/null 2>&1 || die "이미지($IMAGE)가 없습니다. 먼저 ./drtrainer up 으로 빌드하세요."
+    mkdir -p "$OUT"; echo "이미지를 저장합니다..."; docker save "$IMAGE" | gzip > "$OUT/drtrainer-image.tar.gz"
+    if [[ $WITH -eq 1 ]]; then
+        DIR="$(getenvf DRFC_DIR)"; SRC="$(grep -m1 '^DR_SIMAPP_SOURCE=' "$DIR/system.env" 2>/dev/null | cut -d= -f2)"; VER="$(grep -m1 '^DR_SIMAPP_VERSION=' "$DIR/system.env" 2>/dev/null | cut -d= -f2)"
+        MINIO="$(grep -m1 '^DR_MINIO_IMAGE=' "$DIR/system.env" 2>/dev/null | cut -d= -f2)"
+        [[ -n "$SRC" && -n "$VER" ]] || die "system.env 에서 시뮬레이터 이미지를 찾지 못했습니다 (DRfC 초기화 후에 사용하세요)."
+        echo "시뮬레이터 이미지를 저장합니다 (용량이 큽니다)..."; docker save "$SRC:$VER" "minio/minio:${MINIO:-latest}" | gzip > "$OUT/drfc-images.tar.gz"
+    fi
+    cp docker-compose.yml drtrainer "$OUT"/ && chmod +x "$OUT/drtrainer"
+    echo "만들었습니다: $OUT/  (다른 컴퓨터에 이 폴더를 복사한 뒤 ./drtrainer import && ./drtrainer up)"
+    echo "학습한 모델과 설정은 DRfC 폴더($(getenvf DRFC_DIR))와 ./data 에 있으니 필요하면 같이 복사하세요."
+    ;;
+  import)
+    need_docker; SRC="${1:-.}"
+    [[ -f "$SRC/drtrainer-image.tar.gz" ]] || die "$SRC/drtrainer-image.tar.gz 가 없습니다."
+    gunzip -c "$SRC/drtrainer-image.tar.gz" | docker load
+    [[ -f "$SRC/drfc-images.tar.gz" ]] && gunzip -c "$SRC/drfc-images.tar.gz" | docker load
+    echo "불러왔습니다. ./drtrainer up 으로 시작하세요."
+    ;;
+  *) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0" ;;
+esac
