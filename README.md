@@ -15,17 +15,6 @@
   <img src="docs/img/miniracer-result.png" alt="MiniRacer 결과 화면" width="880">
 </p>
 
-<table>
-  <tr>
-    <td width="50%"><img src="docs/img/miniracer-compare.png" alt="MiniRacer 실험 비교"><br><sub>MiniRacer: 실험 비교</sub></td>
-    <td width="50%"><img src="docs/img/miniracer-new.png" alt="MiniRacer 새 실험"><br><sub>MiniRacer: 새 실험</sub></td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="docs/img/deepracer-train.png" alt="DeepRacer 학습"><br><sub>DeepRacer simulator: 학습 (시험용 가짜 DRfC 로 찍은 화면)</sub></td>
-    <td width="50%"><img src="docs/img/deepracer-eval.png" alt="DeepRacer 평가"><br><sub>DeepRacer simulator: 평가 (시험용 가짜 DRfC 로 찍은 화면)</sub></td>
-  </tr>
-</table>
-
 ## 목차
 
 1. [설치 방법](#1-설치-방법)
