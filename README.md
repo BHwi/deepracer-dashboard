@@ -36,8 +36,8 @@ Linux(Ubuntu 22.04 이상 권장)와 Windows(WSL2)에서 설치합니다. 순서
 **(1) 필요한 것 설치**
 
 ```bash
-git clone https://github.com/<사용자>/<저장소>.git
-cd <저장소>
+git clone https://github.com/BHwi/deepracer-dashboard.git
+cd deepracer-dashboard
 
 # Docker Engine 과 Compose 플러그인
 sudo apt update && sudo apt install -y docker.io docker-compose-v2
