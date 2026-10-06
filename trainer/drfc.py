@@ -488,7 +488,7 @@ def doctor():
         checks.append(_chk("cuda_env", "CUDA_VISIBLE_DEVICES", "warn", "이 터미널에 CUDA_VISIBLE_DEVICES 가 설정돼 있습니다. DRfC 는 이 값을 더는 쓰지 않습니다.",
                            "GPU 번호는 아래 'GPU 번호'(DR_SAGEMAKER_CUDA_DEVICES)로 지정하세요."))
 
-    # 자원 (DRfC docs/installation.md 의 Local 권장: 4코어/8 vCPU, RAM+GPU RAM 32GB 이상, 디스크 30~40GB)
+    # 자원 (DRfC docs/installation.md 의 Local 권장: 4코어/8 vCPU, RAM+GPU RAM 32GB 이상. 디스크 30~40GB 는 같은 문서의 AWS 항목(OS 디스크 최소 30GB, 권장 40GB)을 참고한 값이고 Local 항목에는 디스크 요건이 없다)
     cores = os.cpu_count() or 0
     ram = 0.0
     for line in _read("/proc/meminfo").splitlines():

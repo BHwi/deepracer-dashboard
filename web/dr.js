@@ -433,8 +433,25 @@ function startTrain() {
 }
 
 /* ---------------------------------------------------------------- 평가 */
+/* 평가할 모델 고르기: 모델은 실험 하나에 하나이므로 실험을 고르는 것과 같다. 열려 있는 목록이 닫히지 않게 내용이 바뀔 때만 다시 만든다. */
+function renderEvalModels() {
+  const sel = $('#dre-model'), exps = (DR.exps || []).slice().sort((a, b) => Number(b.has_model) - Number(a.has_model));     // 모델이 있는 실험을 위로 (같으면 기존 순서)
+  const sig = exps.map(e => [e.name, e.prefix, e.has_model, e.iterations, e.best_progress].join(':')).join('|');
+  if (sel.dataset.sig !== sig) {
+    sel.dataset.sig = sig;
+    if (!exps.length) sel.replaceChildren(h('option', { value: '' }, '(실험이 없습니다)'));
+    else sel.replaceChildren(...exps.map(e => {
+      const info = e.has_model ? `학습 ${e.iterations || 0} iteration` + (e.best_progress != null ? ` · 평가 ${Math.min(100, e.best_progress).toFixed(0)}%` : '') : '모델 없음 (먼저 학습)';
+      const o = h('option', { value: e.name }, `${e.name}${e.prefix && e.prefix !== e.name ? ` (모델 ${e.prefix})` : ''} — ${info}`);
+      if (!e.has_model) o.disabled = true;
+      return o;
+    }));
+  }
+  if (DR.active && sel.value !== DR.active) sel.value = DR.active;
+}
 function renderEvalHeader() {
   const d = DR.detail; if (!d || S.tab !== 'dr-eval') return;
+  renderEvalModels();
   const st = runStateOf(d), a = DR.ov && DR.ov.active, busy = !!(a && (a.running || a.starting));
   $('#dre-state').textContent = st.text; $('#dre-state').className = 'state ' + (st.cls === 'running' ? 'running' : '');
   $('#dre-start').disabled = busy || !d.has_model; $('#dre-stop').hidden = !(a && a.running && a.experiment === d.name && a.kind === 'evaluation');
@@ -867,6 +884,7 @@ const DRUI = {
     $('#drr-start').addEventListener('click', startTrain);
     $('#drr-stop').addEventListener('click', () => startTask($('#drr-task'), () => api('/api/dr/stop', {}), async () => { await refreshOv(); await refreshExps(); await loadActive(); renderRun(); }));
     $('#dra-custom').addEventListener('submit', runCustomCommand);
+    $('#dre-model').addEventListener('change', ev => { if (ev.target.value) setActiveExp(ev.target.value, false); });
     $('#dre-stop').addEventListener('click', () => startTask($('#dre-task'), () => api('/api/dr/stop', {}), async () => { await refreshOv(); await refreshExps(); renderEval(); }));
     $('#dre-form').addEventListener('submit', startEval);
     $('#drx-form').addEventListener('submit', makeCar);

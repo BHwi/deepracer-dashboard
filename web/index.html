@@ -276,8 +276,9 @@
       <div id="dre-empty" class="empty"></div>
       <div id="dre-body" hidden>
         <div class="runhead"><h1 id="dre-name"></h1><span id="dre-state" class="state"></span></div>
-        <p class="note">학습한 모델을 학습 없이 달려 평가합니다. DRfC 는 한 번에 하나(학습 또는 평가)만 실행하므로 학습을 먼저 중지하세요.</p>
+        <p class="note">학습한 모델을 학습 없이 달려 평가합니다. 평가할 모델은 아래 <b>평가할 모델</b> 에서 고르며, 왼쪽 실험 목록에서 실험을 고른 것과 같습니다. 모델은 실험 하나에 하나씩 있습니다. DRfC 는 한 번에 하나(학습 또는 평가)만 실행하므로 학습을 먼저 중지하세요.</p>
         <form id="dre-form" class="toolrow">
+          <label>평가할 모델 <select id="dre-model" style="min-width:230px"></select></label>
           <label>평가 이름 <input id="dre-label" type="text" maxlength="60" autocomplete="off" placeholder="예: 보상함수 v2 평가" style="width:190px"></label>
           <label>평가 주행 수 <input id="dre-trials" type="number" min="1" max="50" value="3"></label>
           <label>체크포인트 <select id="dre-chk"><option value="last">last</option><option value="best">best</option></select></label>

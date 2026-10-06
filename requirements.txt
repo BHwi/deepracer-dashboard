@@ -1,2 +1,13 @@
+# Python packages for running the dashboard and MiniRacer directly on the host
+# (python3 dashboard.py, python3 train.py).
+#
+# NOT needed for "./drtrainer up": the Docker image installs numpy, matplotlib,
+# the AWS CLI, jq and DRfC by itself.
+# Docker, Docker Compose and the NVIDIA driver cannot be installed with pip.
+# See "1. Install" in README.md (Korean: "1. 설치 방법").
+#
+# On Ubuntu 24.04 use a virtual environment (otherwise: externally-managed-environment):
+#   python3 -m venv .venv && source .venv/bin/activate
+#   pip3 install -r requirements.txt
 numpy
 matplotlib
