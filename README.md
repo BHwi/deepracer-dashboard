@@ -94,7 +94,7 @@ chmod +x drtrainer
 - 파이썬, numpy, matplotlib, AWS CLI, jq, DRfC 는 이미지 안에 설치되므로 호스트에 필요하지 않습니다. `requirements.txt` 는 위의 파이썬 패키지 단계에서만 쓰입니다.
 - Docker 와 NVIDIA 드라이버는 pip 로 설치할 수 없으므로 `requirements.txt` 에는 들어 있지 않습니다.
 
-### 1.2 Docker 없이 실행
+### 1.2 Docker 없이 실행 (비권장)
 
 - MiniRacer 만 쓰는 경우: 위의 파이썬 패키지 단계를 마친 뒤 `python3 dashboard.py` 를 실행하면 브라우저가 열립니다.
 - DeepRacer simulator 를 Docker 이미지 없이 호스트에 직접 설치하는 경우(Ubuntu): `scripts/setup_drfc.sh` 를 사용합니다. [직접 설치 (Ubuntu)](#직접-설치-ubuntu)를 참고합니다.
