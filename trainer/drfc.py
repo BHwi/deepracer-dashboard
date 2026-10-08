@@ -42,7 +42,9 @@ DEFAULT_HP = {"batch_size": 64, "beta_entropy": 0.01, "discount_factor": 0.99, "
 WORLDS = ["reinvent_base", "reInvent2019_track", "reInvent2019_wide", "reInvent2019_wide_mirrored", "Vegas_track", "Canada_Training",
           "Oval_track", "Tokyo_Training_track", "AWS_track", "Spain_track", "Monaco", "Singapore", "2022_april_open", "2022_june_open"]
 CAR_COLORS = ["Black", "Grey", "Blue", "Red", "Orange", "White", "Purple"]
-CUDA_IMAGE_FALLBACK = "nvcr.io/nvidia/cuda:12.6.3-base-ubuntu24.04"
+GPU_SCRIPT = os.path.join(HERE, "scripts", "gpu_check.sh")
+SIMAPP_SOURCE = "awsdeepracercommunity/deepracer-simapp"
+LOCAL_GPU_SOURCE = "drtrainer/deepracer-simapp"     # scripts/gpu_norequire.sh 가 만드는 로컬 GPU 이미지 (CUDA 요구 검사를 끄고 compat 를 없앤 것)
 
 
 class DrfcError(ValueError):
@@ -539,6 +541,10 @@ _tlock = threading.Lock()
 
 
 def _hints(text):
+    m = re.search(r"unsatisfied condition: cuda>=([0-9][0-9.]*)", text, re.I)
+    if m:        # 이 오류 문장에는 'driver' 와 'nvidia' 가 들어 있어서 아래의 일반 GPU 안내가 엉뚱하게 같이 걸리므로, 이 안내 하나만 돌려준다
+        return [f"GPU 연결이 아니라 CUDA 버전 문제입니다. 이미지가 CUDA {m.group(1)} 이상을 요구하는데 이 컴퓨터의 NVIDIA 드라이버가 그 CUDA 를 지원하지 못합니다 (nvidia-smi 오른쪽 위의 'CUDA Version' 이 지원하는 최대 값). "
+                "드라이버를 바꿀 수 없다면 CPU 모드로 쓸 수 있습니다 (환경 점검 > GPU / CPU). 환경 점검의 'GPU 컨테이너 시험'을 누르면 가능한 선택지를 알려 줍니다."]
     h = []
     pairs = [
         (r"Selected path .* exists", "DRfC 가 이 이름의 모델 경로가 이미 있다고 판단했습니다. 같은 이름의 모델이 있거나, 이름이 같은 글자로 시작하는 다른 모델(예: 'exp' 와 'exp_v2')이 있을 때 나옵니다 (DRfC 는 끝에 / 없이 접두사로 검사합니다). 처음부터 다시 학습하려면 학습 화면의 '덮어쓰기'를 체크하세요. 덮어쓰기는 이 이름의 모델만 지웁니다 (이름이 비슷한 다른 모델은 지우지 않는 것을 확인했습니다, aws cli 1.x)."),
@@ -724,11 +730,12 @@ def build_minio_image():
 
 
 def gpu_test():
+    """GPU 컨테이너 시험. scripts/gpu_check.sh --container-only 가 DRfC 의 init.sh 와 같은 방법으로 GPU 를 시험하고,
+    실패하면 원인을 구분한다 (CUDA 버전 요구 미달이면 요구 검사를 끄고 다시 시험). 종료 코드 2(GPU 는 되는데 CPU 모드), 3(CUDA 요구 미달)은 시험이 끝난 결과이므로 '완료'로 둔다."""
     d = _need_drfc()
-    init = _read(os.path.join(d, "bin", "init.sh"))
-    m = re.search(r"nvcr\.io/nvidia/cuda:[A-Za-z0-9._-]+", init)
-    image = m.group(0) if m else CUDA_IMAGE_FALLBACK
-    return run_task("GPU 컨테이너 시험", ["docker", "run", "--rm", "--gpus", "all", "--pull=missing", image, "nvidia-smi", "-L"], cwd=d, env=_env(d), exclusive=False)
+    wrap = 'bash "$0" "$@"; rc=$?; if [ "$rc" = 2 ] || [ "$rc" = 3 ]; then exit 0; fi; exit "$rc"'
+    return run_task("GPU 컨테이너 시험", ["bash", "-c", wrap, GPU_SCRIPT, "--container-only", d], cwd=d, env=_env(d), exclusive=False,
+                    shown=f"bash scripts/gpu_check.sh --container-only {d}")
 
 
 def set_arch(arch, cuda_devices=None, workers=None):
@@ -747,6 +754,10 @@ def set_arch(arch, cuda_devices=None, workers=None):
     if not m:
         raise DrfcError("system.env 의 DR_SIMAPP_VERSION 이 '<버전>-gpu' 또는 '<버전>-cpu' 형식이 아닙니다. init.sh 를 먼저 실행하세요.")
     updates = {"DR_SIMAPP_VERSION": f"{m.group(1)}-{arch}"}
+    src = se.get("DR_SIMAPP_SOURCE", SIMAPP_SOURCE)
+    if arch == "cpu" and src == LOCAL_GPU_SOURCE:       # 로컬 GPU 이미지는 GPU 전용이므로 CPU 로 돌아갈 때는 원래 이미지 이름으로 되돌린다
+        src = SIMAPP_SOURCE
+        updates["DR_SIMAPP_SOURCE"] = SIMAPP_SOURCE
     if cuda_devices is not None:
         cd = str(cuda_devices).strip()
         if cd and not re.fullmatch(r"\d+(,\d+)*", cd):
@@ -760,8 +771,10 @@ def set_arch(arch, cuda_devices=None, workers=None):
     backup = path + time.strftime(".bak-%m%d-%H%M%S")
     shutil.copy(path, backup)
     _write(path, set_env(text, updates))
-    image = f"{se.get('DR_SIMAPP_SOURCE', 'awsdeepracercommunity/deepracer-simapp')}:{m.group(1)}-{arch}"
-    t = run_task(f"시뮬레이터 이미지 내려받기 ({arch.upper()})", ["docker", "pull", image], cwd=d, env=_env(d), exclusive=False)
+    image = f"{src}:{m.group(1)}-{arch}"
+    # 이 컴퓨터에 이미 있는 이미지(로컬에서 만든 것 포함)는 레지스트리에 없을 수 있으므로 내려받지 않는다
+    pull = 'if docker image inspect "$1" >/dev/null 2>&1; then echo "이 컴퓨터에 이미 있어 내려받지 않습니다: $1"; else docker pull "$1"; fi'
+    t = run_task(f"시뮬레이터 이미지 준비 ({arch.upper()})", ["bash", "-c", pull, "_", image], cwd=d, env=_env(d), exclusive=False, shown=f"docker pull {image}   (이 컴퓨터에 이미 있으면 건너뜀)")
     t["backup"] = os.path.basename(backup)
     return t
 
